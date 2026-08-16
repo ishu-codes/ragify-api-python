@@ -12,6 +12,7 @@ dependencies = [
     "fastapi[standard]>=0.141.1",
     "grpcio>=1.83.0",
     "grpcio-tools>=1.83.0",
+    "protobuf>=5.0.0",
     "psycopg[binary]>=3.3.4",
     "pyjwt>=2.13.0",
     "python-dotenv>=1.2.2",
