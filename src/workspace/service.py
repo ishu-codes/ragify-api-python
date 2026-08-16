@@ -1,4 +1,5 @@
 import asyncio
+import mimetypes
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -9,7 +10,6 @@ from sqlalchemy.ext.asyncio.session import AsyncSession
 sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
 
 from fastapi import HTTPException, UploadFile
-from langchain_core.messages import AIMessage, HumanMessage, messages_from_dict
 
 from src.utils.files import ensure_dir, remove_dir
 
@@ -22,17 +22,6 @@ from ..ragify_client import (
 )
 from .repository import SessionRepository, UploadRepository, WorkspaceRepository
 from .utils import replace_extension
-
-_magika = None
-
-
-def _get_magika():
-    global _magika
-    if _magika is None:
-        from magika import Magika
-
-        _magika = Magika()
-    return _magika
 
 
 def _invalid_userId():
@@ -184,7 +173,7 @@ async def _process_text_files(
             await _append_upload_log(
                 db,
                 status_id,
-                f"Successfully processed {file_label} file: {file['name']} ({len(chunks)} chunks)",
+                f"Successfully processed {file_label} file: {file['name']} ({chunks} chunks)",
             )
             successful_count += 1
 
@@ -399,8 +388,8 @@ class SessionService:
         if session is None:
             raise HTTPException(status_code=404, detail="Session could not be found")
 
-        chat_messages = messages_from_dict(session.messages)
-        chat_messages.append(HumanMessage(content=query))
+        chat_messages = list(session.messages or [])
+        chat_messages.append({"role": "user", "content": query})
 
         # The RAG graph (retrieval + evaluation + generation) is synchronous and
         # can take a while; run it in a worker thread so the event loop keeps
@@ -420,8 +409,8 @@ class SessionService:
                 status_code=504, detail="Query timed out. Please try again."
             ) from None
         print("[query] RAG graph invocation finished")
-        output_text = result["messages"][-1].content
-        chat_messages.append(AIMessage(content=output_text))
+        output_text = result["messages"][-1]["content"]
+        chat_messages.append({"role": "assistant", "content": output_text})
 
         await SessionRepository.update_messages(session, chat_messages)
         await db.commit()
@@ -506,13 +495,8 @@ class UploadService:
             file_id = str(uuid4())
             file_bytes = await file.read()
 
-            magika_result = _get_magika().identify_bytes(file_bytes)
-            mime_type = (
-                magika_result.output.mime_type
-                if magika_result.ok
-                else "application/octet-stream"
-            )
-            # file_extension = replace_extension(file.filename, mime_type)
+            mime_type, _ = mimetypes.guess_type(file.filename)
+            mime_type = mime_type or "application/octet-stream"
             filename = replace_extension(file.filename, mime_type)
 
             target_path = upload_dir / f"{file_id}-{filename}"

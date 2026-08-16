@@ -1,4 +1,4 @@
-from apps.api.src.auth.models import User
+from .models import User
 
 
 def serialize_user(user: User) -> dict[str, int | str]:

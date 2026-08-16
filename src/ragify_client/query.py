@@ -1,14 +1,6 @@
-"""RAG query facade mirroring ``src.ragify.generation.builder`` over gRPC."""
+"""RAG query facade mirroring the ragify-rag RagService over gRPC."""
 
 from __future__ import annotations
-
-from langchain_core.messages import (
-    AIMessage,
-    BaseMessage,
-    HumanMessage,
-    SystemMessage,
-    messages_from_dict,
-)
 
 from . import client as grpc
 from .protos import ragify_pb2
@@ -16,34 +8,27 @@ from .protos import ragify_pb2
 _SERVICE = "rag"
 DEFAULT_QUERY_TIMEOUT = 300.0
 
+_WIRE_ROLES = {"user", "assistant", "system"}
+_ROLE_ALIASES = {"human": "user", "ai": "assistant"}
+
 
 def _to_wire_message(message) -> ragify_pb2.ChatMessage:
     if isinstance(message, dict):
-        if "role" in message and "content" in message:
-            role = message["role"]
-            if role in ("assistant", "ai"):
-                message = AIMessage(content=message["content"])
-            elif role == "system":
-                message = SystemMessage(content=message["content"])
-            else:
-                message = HumanMessage(content=message["content"])
-        else:
-            message = messages_from_dict([message])[0]
-    elif not isinstance(message, BaseMessage):
-        message = HumanMessage(content=str(message))
-
-    if isinstance(message, AIMessage):
-        role = "assistant"
-    elif isinstance(message, SystemMessage):
-        role = "system"
+        role = message.get("role") or message.get("type") or "user"
+        content = message.get("content")
+        if content is None and isinstance(message.get("data"), dict):
+            content = message["data"].get("content")
     else:
-        role = "user"
+        role, content = "user", str(message)
 
-    return ragify_pb2.ChatMessage(role=role, content=message.content)
+    role = _ROLE_ALIASES.get(role, role)
+    if role not in _WIRE_ROLES:
+        role = "user"
+    return ragify_pb2.ChatMessage(role=role, content=str(content or ""))
 
 
 class _Builder:
-    """Compatible with ``builder.invoke({...})`` from src.ragify.generation."""
+    """Compatible with ``builder.invoke({...})`` from the RAG graph."""
 
     def invoke(self, payload: dict, timeout: float = DEFAULT_QUERY_TIMEOUT) -> dict:
         workspace_id = int(payload["workspace_id"])
@@ -58,7 +43,7 @@ class _Builder:
             ),
             timeout=timeout,
         )
-        return {"messages": [AIMessage(content=response.answer)]}
+        return {"messages": [{"role": "assistant", "content": response.answer}]}
 
 
 builder = _Builder()

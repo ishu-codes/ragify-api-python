@@ -1,7 +1,5 @@
 from datetime import UTC, datetime
 
-from langchain_core.messages import BaseMessage
-from langchain_core.messages.base import message_to_dict
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio.session import AsyncSession
 
@@ -94,8 +92,8 @@ class SessionRepository:
         )
 
     @staticmethod
-    async def update_messages(chat_session: Session, messages: list[BaseMessage]):
-        chat_session.messages = [message_to_dict(message) for message in messages]
+    async def update_messages(chat_session: Session, messages: list[dict]):
+        chat_session.messages = messages
 
 
 # ----- Uploads -----

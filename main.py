@@ -10,13 +10,13 @@ from fastapi.responses import JSONResponse
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
-from apps.api.src.auth.controller import router as auth_router
-from apps.api.src.config.db import (
+from src.auth.controller import router as auth_router
+from src.config.db import (
     close_database_connection,
     connect_to_database,
     db_manager,
 )
-from apps.api.src.workspace.controller import router as workspace_router
+from src.workspace.controller import router as workspace_router
 
 load_dotenv()
 
@@ -33,7 +33,7 @@ async def lifespan(app: FastAPI):
     yield
     await close_database_connection()
 
-    from apps.api.src.ragify_client import client as ragify_client
+    from src.ragify_client import client as ragify_client
 
     ragify_client.close()
 

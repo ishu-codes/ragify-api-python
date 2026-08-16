@@ -1,8 +1,6 @@
-"""Vector store facade mirroring ``src.ragify.retrieval.VectorStoreManager``."""
+"""Vector store facade mirroring the ragify-rag VectorStoreService."""
 
 from __future__ import annotations
-
-from langchain_core.documents import Document
 
 from . import client as grpc
 from .protos import ragify_pb2
@@ -43,18 +41,23 @@ class VectorStoreManager:
         )
         return True
 
-    def insert_documents(
-        self, collection_name: str, documents: list[Document]
-    ) -> None:
-        wire_documents = [
-            ragify_pb2.Document(
-                text=doc.page_content,
-                metadata={
-                    str(key): str(value) for key, value in (doc.metadata or {}).items()
-                },
+    def insert_documents(self, collection_name: str, documents: list) -> None:
+        wire_documents = []
+        for doc in documents:
+            if isinstance(doc, dict):
+                text = doc.get("page_content") or doc.get("text") or ""
+                metadata = doc.get("metadata") or {}
+            else:
+                text = getattr(doc, "page_content", "") or ""
+                metadata = getattr(doc, "metadata", None) or {}
+            wire_documents.append(
+                ragify_pb2.Document(
+                    text=str(text),
+                    metadata={
+                        str(key): str(value) for key, value in metadata.items()
+                    },
+                )
             )
-            for doc in documents
-        ]
         grpc.call(
             _SERVICE,
             "InsertDocuments",

@@ -8,8 +8,8 @@ from fastapi import Depends, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio.session import AsyncSession
 
-from apps.api.src.auth.models import User
-from apps.api.src.config.db import get_session
+from .models import User
+from ..config.db import get_session
 
 # from src.auth.schemas import UserDto
 from .repository import find_user_by_id

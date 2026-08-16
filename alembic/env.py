@@ -8,12 +8,12 @@ from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from apps.api.src.auth import models as auth_models  # noqa: F401,E402
-from apps.api.src.config.db import DATABASE_URL  # noqa: E402
-from apps.api.src.config.models import Base  # noqa: E402
-from apps.api.src.workspace import models as workspace_models  # noqa: F401,E402
+from src.auth import models as auth_models  # noqa: F401,E402
+from src.config.db import DATABASE_URL  # noqa: E402
+from src.config.models import Base  # noqa: E402
+from src.workspace import models as workspace_models  # noqa: F401,E402
 
 config = context.config
 config.set_main_option("sqlalchemy.url", DATABASE_URL)

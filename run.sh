@@ -24,7 +24,7 @@ case "$1" in
     ;;
 
     ragify-server)
-        python -m src.ragify.grpc
+        cd ../rag && .venv/bin/python -m src.grpc
     ;;
 
     #  curl commands

@@ -108,9 +108,16 @@ class SessionMessagesResponse(BaseModel):
             "messages": [
                 {
                     "id": f"msg-{index}",
-                    "role": "assistant" if message.get("type") == "ai" else "user",
-                    "content": message.get("data", {}).get("content", ""),
-                    "createdAt": message.get("data", {})
+                    "role": (
+                        "assistant"
+                        if message.get("role") in ("assistant", "ai")
+                        or message.get("type") == "ai"
+                        else "user"
+                    ),
+                    "content": message.get("content")
+                    or message.get("data", {}).get("content", ""),
+                    "createdAt": message.get("createdAt")
+                    or message.get("data", {})
                     .get("additional_kwargs", {})
                     .get("created_at", ""),
                 }
