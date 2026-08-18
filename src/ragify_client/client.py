@@ -15,6 +15,7 @@ import grpc
 from .protos import ragify_pb2_grpc
 
 DEFAULT_ENDPOINT = "localhost:50051"
+MAX_MESSAGE_LENGTH = 500 * 1024 * 1024
 
 
 def endpoint() -> str:
@@ -31,7 +32,13 @@ class RagifyClient:
         self._stubs: dict[str, object] | None = None
 
     def _connect(self) -> None:
-        channel = grpc.insecure_channel(self._endpoint)
+        channel = grpc.insecure_channel(
+            self._endpoint,
+            options=[
+                ("grpc.max_send_message_length", MAX_MESSAGE_LENGTH),
+                ("grpc.max_receive_message_length", MAX_MESSAGE_LENGTH),
+            ],
+        )
         self._channel = channel
         self._stubs = {
             "vector_store": ragify_pb2_grpc.VectorStoreServiceStub(channel),
