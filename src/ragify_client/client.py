@@ -32,13 +32,20 @@ class RagifyClient:
         self._stubs: dict[str, object] | None = None
 
     def _connect(self) -> None:
-        channel = grpc.insecure_channel(
-            self._endpoint,
-            options=[
-                ("grpc.max_send_message_length", MAX_MESSAGE_LENGTH),
-                ("grpc.max_receive_message_length", MAX_MESSAGE_LENGTH),
-            ],
-        )
+        channel_options = [
+            ("grpc.max_send_message_length", MAX_MESSAGE_LENGTH),
+            ("grpc.max_receive_message_length", MAX_MESSAGE_LENGTH),
+        ]
+        if os.getenv("RAGIFY_GRPC_TLS", "").lower() in ("1", "true", "yes"):
+            # Cloud Run terminates TLS at its proxy; the client only needs
+            # default SSL credentials against the *.run.app endpoint.
+            channel = grpc.secure_channel(
+                self._endpoint,
+                grpc.ssl_channel_credentials(),
+                options=channel_options,
+            )
+        else:
+            channel = grpc.insecure_channel(self._endpoint, options=channel_options)
         self._channel = channel
         self._stubs = {
             "vector_store": ragify_pb2_grpc.VectorStoreServiceStub(channel),
