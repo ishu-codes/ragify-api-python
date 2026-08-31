@@ -6,6 +6,7 @@ class UserInfo(BaseModel):
     id: int
     name: str
     email: str
+    credit_balance: int
 
     model_config = ConfigDict(from_attributes=True)
 

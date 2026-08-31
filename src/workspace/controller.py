@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth.utils import get_current_user_id, require_auth
 from ..config.db import get_session
+from ..quotas.rate_limit import rate_limit_authenticated
 from .schemas import (
     IdResponse,
     QueryBody,
@@ -18,7 +19,9 @@ from .schemas import (
 )
 from .service import SessionService, UploadService, WorkspaceService
 
-router = APIRouter(dependencies=[Depends(require_auth)])
+router = APIRouter(
+    dependencies=[Depends(require_auth), Depends(rate_limit_authenticated("api_min"))]
+)
 
 
 # Workspace
@@ -41,7 +44,15 @@ async def workspace_detail(
     return await WorkspaceService.get_workspace(db, workspace_id, user_id)
 
 
-@router.post("/", response_model=WorkspaceResponse, status_code=201)
+@router.post(
+    "/",
+    response_model=WorkspaceResponse,
+    status_code=201,
+    dependencies=[
+        Depends(rate_limit_authenticated("workspace_create_hour")),
+        Depends(rate_limit_authenticated("workspace_create_day")),
+    ],
+)
 async def new_workspace(
     db: AsyncSession = Depends(get_session),
     user_id: int = Depends(get_current_user_id),
@@ -73,7 +84,14 @@ async def delete_workspace_route(
 # Uploads
 
 
-@router.post("/{workspace_id}/upload", response_model=UploadResponse)
+@router.post(
+    "/{workspace_id}/upload",
+    response_model=UploadResponse,
+    dependencies=[
+        Depends(rate_limit_authenticated("upload_hour")),
+        Depends(rate_limit_authenticated("upload_day")),
+    ],
+)
 async def workspace_upload(
     workspace_id: int,
     files: list[UploadFile] = File(...),
@@ -96,7 +114,14 @@ async def workspace_upload_status(
 # Sessions
 
 
-@router.post("/{workspace_id}/query", response_model=QueryResponse)
+@router.post(
+    "/{workspace_id}/query",
+    response_model=QueryResponse,
+    dependencies=[
+        Depends(rate_limit_authenticated("query_min")),
+        Depends(rate_limit_authenticated("query_day")),
+    ],
+)
 async def workspace_query(
     workspace_id: int,
     body: QueryBody,

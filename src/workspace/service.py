@@ -14,6 +14,15 @@ from fastapi import HTTPException, UploadFile
 from src.utils.files import ensure_dir, remove_dir
 
 from ..config.db import async_session_maker
+from ..quotas.credits import (
+    REASON_UPLOAD,
+    add_workspace_storage,
+    ensure_storage_capacity,
+    ensure_workspace_cap,
+    require_query_credit,
+    spend_credits,
+    upload_credit_cost,
+)
 from ..ragify_client import (
     GrobidIngestor,
     builder,
@@ -310,6 +319,7 @@ class WorkspaceService:
 
     @staticmethod
     async def create_workspace(db: AsyncSession, user_id: int):
+        await ensure_workspace_cap(db, user_id)
         workspace = await WorkspaceRepository.create_new_workspace(db, user_id)
         await db.commit()
         await db.refresh(workspace)
@@ -379,6 +389,7 @@ class SessionService:
         user_id: int,
     ):
         await _ensure_workspace_access(db, workspace_id, user_id)
+        await require_query_credit(db, user_id, workspace_id)
 
         if not session_id:
             session = await SessionRepository.create_session(db, workspace_id)
@@ -404,10 +415,14 @@ class SessionService:
                 timeout=240,
             )
         except asyncio.TimeoutError:
+            await db.rollback()
             print("[query] RAG graph invocation timed out")
             raise HTTPException(
                 status_code=504, detail="Query timed out. Please try again."
             ) from None
+        except Exception:
+            await db.rollback()
+            raise
         print("[query] RAG graph invocation finished")
         output_text = result["messages"][-1]["content"]
         chat_messages.append({"role": "assistant", "content": output_text})
@@ -556,6 +571,29 @@ class UploadService:
             raise HTTPException(
                 status_code=400, detail="No files were uploaded successfully"
             )
+
+        total_bytes = sum(int(record.get("size") or 0) for record in material_records)
+        await ensure_storage_capacity(db, user_id, total_bytes)
+
+        cost = upload_credit_cost(total_bytes)
+        if not await spend_credits(
+            db,
+            user_id,
+            cost,
+            REASON_UPLOAD,
+            {"bytes": total_bytes, "files": len(material_records)},
+        ):
+            # The request failed before anything was committed; drop the files
+            # that were written to disk so failed attempts don't leak storage.
+            remove_dir(str(upload_dir))
+            raise HTTPException(
+                status_code=402,
+                detail=(
+                    "You've used all your free credits for this month. "
+                    "Credits reset on the 1st."
+                ),
+            )
+        await add_workspace_storage(db, workspace_id, total_bytes)
 
         status = await UploadRepository.create_upload_status(
             db, workspace_id, user_id, material_records

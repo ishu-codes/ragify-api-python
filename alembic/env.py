@@ -13,6 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from src.auth import models as auth_models  # noqa: F401,E402
 from src.config.db import DATABASE_URL  # noqa: E402
 from src.config.models import Base  # noqa: E402
+from src.quotas import models as quota_models  # noqa: F401,E402
 from src.workspace import models as workspace_models  # noqa: F401,E402
 
 config = context.config
