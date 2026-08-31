@@ -35,21 +35,21 @@ case "$1" in
 
     # Auth
     register)
-        curl -X POST $BASE_URL_API/auth/register \
+        curl -i -X POST $BASE_URL_API/auth/register \
         -H "Content-Type: application/json" \
         -d "{
                 \"name\": \"$2\",
                 \"email\": \"$2@email.com\",
-                \"password\": \"${2}@1234\"
+                \"password\": \"${2}@123456\"
             }"
     ;;
 
     login)
-        curl -X POST $BASE_URL_API/auth/login \
+        curl -i -X POST $BASE_URL_API/auth/login \
         -H "Content-Type: application/json" \
         -d "{
                 \"email\": \"$2@email.com\",
-                \"password\": \"${2}@1234\"
+                \"password\": \"${2}@123456\"
             }"
     ;;
 

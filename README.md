@@ -20,6 +20,20 @@ uv sync
 
 or `./run.sh dev`. Requires PostgreSQL (see repo root `docker compose` / `make infra-up`) and the rag gRPC server on `RAGIFY_GRPC_ENDPOINT` (default `localhost:50051`) for workspace/upload/query features.
 
+## Tests
+
+Rate limiting and credits are PostgreSQL-backed, so the test suite needs a
+Postgres instance (the one from `make infra-up` works):
+
+```bash
+uv sync --extra dev
+make api-test
+```
+
+The test database (default `ragify_test` on the same server as the app DB)
+and its schema are created automatically on first run. Point
+`TEST_DATABASE_URL` elsewhere if you want a dedicated instance.
+
 ## Endpoints
 
 All routes are prefixed with `/api/v1`. `auth/register` and `auth/login` are public; everything else needs `Authorization: Bearer <jwt>`.
