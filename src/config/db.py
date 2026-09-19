@@ -17,8 +17,20 @@ DATABASE_URL = getenv(
 
 class DatabaseManager:
     def __init__(self, url: str = DATABASE_URL):
-        self.engine = create_async_engine(url, pool_pre_ping=True)
-        self.session_maker = async_sessionmaker(self.engine, expire_on_commit=False)
+        self.engine = create_async_engine(
+            url,
+            pool_size=5,
+            max_overflow=5,
+            pool_timeout=30,
+            pool_pre_ping=True,
+            connect_args={
+                "statement_cache_size": 0,
+            },
+        )
+
+        self.session_maker = async_sessionmaker(
+            self.engine, class_=AsyncSession, expire_on_commit=False
+        )
 
     def create_session(self) -> AsyncSession:
         return self.session_maker()
