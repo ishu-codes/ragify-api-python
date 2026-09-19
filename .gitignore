@@ -14,3 +14,6 @@ wheels/
 
 # Storage
 storage/
+
+# Unnecessary files
+*/results.md

@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, File, UploadFile
+from opentelemetry import trace
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth.utils import get_current_user_id, require_auth
@@ -20,8 +21,13 @@ from .schemas import (
 from .service import SessionService, UploadService, WorkspaceService
 
 router = APIRouter(
-    dependencies=[Depends(require_auth), Depends(rate_limit_authenticated("api_min"))]
+    dependencies=[
+        Depends(require_auth),
+        # Depends(rate_limit_authenticated("api_min"))
+    ]
 )
+
+tracer = trace.get_tracer(__name__)
 
 
 # Workspace
@@ -32,7 +38,8 @@ async def workspaces(
     db: AsyncSession = Depends(get_session),
     user_id: int = Depends(get_current_user_id),
 ):
-    return await WorkspaceService.get_workspaces(db, user_id)
+    with tracer.start_as_current_span("get_workspaces"):
+        return await WorkspaceService.get_workspaces(db, user_id)
 
 
 @router.get("/{workspace_id}", response_model=WorkspaceResponse)
@@ -48,10 +55,10 @@ async def workspace_detail(
     "/",
     response_model=WorkspaceResponse,
     status_code=201,
-    dependencies=[
-        Depends(rate_limit_authenticated("workspace_create_hour")),
-        Depends(rate_limit_authenticated("workspace_create_day")),
-    ],
+    # dependencies=[
+    #     Depends(rate_limit_authenticated("workspace_create_hour")),
+    #     Depends(rate_limit_authenticated("workspace_create_day")),
+    # ],
 )
 async def new_workspace(
     db: AsyncSession = Depends(get_session),
@@ -88,8 +95,8 @@ async def delete_workspace_route(
     "/{workspace_id}/upload",
     response_model=UploadResponse,
     dependencies=[
-        Depends(rate_limit_authenticated("upload_hour")),
-        Depends(rate_limit_authenticated("upload_day")),
+        # Depends(rate_limit_authenticated("upload_hour")),
+        # Depends(rate_limit_authenticated("upload_day")),
     ],
 )
 async def workspace_upload(
@@ -118,8 +125,8 @@ async def workspace_upload_status(
     "/{workspace_id}/query",
     response_model=QueryResponse,
     dependencies=[
-        Depends(rate_limit_authenticated("query_min")),
-        Depends(rate_limit_authenticated("query_day")),
+        # Depends(rate_limit_authenticated("query_min")),
+        # Depends(rate_limit_authenticated("query_day")),
     ],
 )
 async def workspace_query(

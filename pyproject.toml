@@ -10,6 +10,7 @@ dependencies = [
     "bcrypt>=5.0.0",
     "cors>=1.0.1",
     "fastapi[standard]>=0.141.1",
+    # "granian[uvloop]>=2.8.2",
     "grpcio>=1.83.0",
     "grpcio-tools>=1.83.0",
     "protobuf>=5.0.0",

@@ -3,10 +3,13 @@ from os import getenv
 
 from dotenv import load_dotenv
 from fastapi.requests import Request
+from opentelemetry import trace
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 load_dotenv()
+
+tracer = trace.get_tracer(__name__)
 
 
 DATABASE_URL = getenv(
@@ -74,6 +77,7 @@ async def get_session(request: Request) -> AsyncGenerator[AsyncSession, None]:
 
     db: AsyncSession = manager.create_session()
     try:
-        yield db
+        with tracer.start_as_current_span("get_session"):
+            yield db
     finally:
         await db.close()

@@ -6,6 +6,7 @@ import jwt
 from dotenv import load_dotenv
 from fastapi import Depends, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from opentelemetry import trace
 from sqlalchemy.ext.asyncio.session import AsyncSession
 
 from ..config.db import get_session
@@ -16,6 +17,8 @@ from .repository import find_user_by_id
 from .serializer import serialize_user
 
 load_dotenv()
+
+tracer = trace.get_tracer(__name__)
 
 bearer_scheme = HTTPBearer()
 
@@ -102,4 +105,5 @@ def authenticated_user(request: Request) -> dict[str, str | int]:
 
 def get_current_user_id(request: Request) -> int:
     """Dependency that returns the authenticated user's id."""
-    return int(authenticated_user(request)["id"])
+    with tracer.start_as_current_span("get_current_user_id"):
+        return int(authenticated_user(request)["id"])
