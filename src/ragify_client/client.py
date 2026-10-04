@@ -7,6 +7,7 @@ reconnecting, which keeps the facade resilient to ragify-rag restarts.
 
 from __future__ import annotations
 
+import logging
 import os
 import threading
 
@@ -14,12 +15,69 @@ import grpc
 
 from .protos import ragify_pb2_grpc
 
+logger = logging.getLogger(__name__)
+
 DEFAULT_ENDPOINT = "localhost:50051"
 MAX_MESSAGE_LENGTH = 500 * 1024 * 1024
 
 
 def endpoint() -> str:
     return os.getenv("RAGIFY_GRPC_ENDPOINT", DEFAULT_ENDPOINT)
+
+
+def _tls_enabled() -> bool:
+    return os.getenv("RAGIFY_GRPC_TLS", "").lower() in ("1", "true", "yes")
+
+
+def _audience() -> str | None:
+    """Audience Cloud Run checks on the ID token: the service's own URL.
+
+    Derived from the endpoint so deployments do not have to set a second
+    variable; ``RAGIFY_GRPC_AUDIENCE`` overrides it for custom domains.
+    """
+    explicit = os.getenv("RAGIFY_GRPC_AUDIENCE")
+    if explicit:
+        return explicit.rstrip("/")
+    host = endpoint().rsplit(":", 1)[0]
+    return f"https://{host}" if host else None
+
+
+def _channel_credentials() -> grpc.ChannelCredentials:
+    """TLS credentials carrying a Cloud Run ID token where one is available.
+
+    ragify-rag runs with ``--no-allow-unauthenticated``, so every call must
+    present a Google-signed ID token whose audience is the service URL. The
+    token comes from the Cloud Run metadata server and is refreshed by
+    ``AuthMetadataPlugin`` for the life of the channel. Off Google Cloud (local
+    development, tests) there is no metadata server, so the channel falls back
+    to plain TLS against endpoints that do not require authentication.
+    """
+    base = grpc.ssl_channel_credentials()
+    audience = _audience()
+    if not audience:
+        return base
+
+    try:
+        from google.auth.transport import grpc as google_auth_grpc
+        from google.auth.transport import requests as google_auth_requests
+        from google.oauth2 import id_token
+
+        request = google_auth_requests.Request()
+        credentials = id_token.fetch_id_token_credentials(audience, request=request)
+    except Exception as exc:  # no metadata server, or google-auth not installed
+        logger.warning(
+            "No ID token for %s (%s); calling ragify-rag unauthenticated",
+            audience,
+            exc,
+        )
+        return base
+
+    plugin = google_auth_grpc.AuthMetadataPlugin(
+        credentials=credentials, request=request
+    )
+    return grpc.composite_channel_credentials(
+        base, grpc.metadata_call_credentials(plugin)
+    )
 
 
 class RagifyClient:
@@ -36,12 +94,13 @@ class RagifyClient:
             ("grpc.max_send_message_length", MAX_MESSAGE_LENGTH),
             ("grpc.max_receive_message_length", MAX_MESSAGE_LENGTH),
         ]
-        if os.getenv("RAGIFY_GRPC_TLS", "").lower() in ("1", "true", "yes"):
-            # Cloud Run terminates TLS at its proxy; the client only needs
-            # default SSL credentials against the *.run.app endpoint.
+        if _tls_enabled():
+            # Cloud Run terminates TLS at its proxy; the client needs default
+            # SSL credentials plus, once ragify-rag requires authentication, an
+            # ID token for the service URL.
             channel = grpc.secure_channel(
                 self._endpoint,
-                grpc.ssl_channel_credentials(),
+                _channel_credentials(),
                 options=channel_options,
             )
         else:

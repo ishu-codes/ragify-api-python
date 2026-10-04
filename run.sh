@@ -8,13 +8,15 @@ MONGO_PATH="mongodb://myuser:mypassword@localhost:27017/ragify?authSource=admin"
 
 PROJECT_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 
-if [ ! -d ".venv" ]; then
-    uv venv .venv
-fi
+# Install exactly what uv.lock pins: runtime deps, plus the "dev" dependency
+# group (OpenTelemetry, Prometheus) and the "dev" extra (pytest). This creates
+# .venv if it is missing and repairs it if it is damaged.
+#
+# --frozen makes uv refuse to rewrite the lockfile, so a pyproject.toml/lock
+# mismatch fails loudly instead of silently leaving a half-installed venv.
+uv sync --frozen --group dev --extra dev
 
 source .venv/bin/activate
-
-uv pip install -q pyyaml pydantic pydotenv langchain-core langchain langchain-ollama langchain-qdrant langgraph langchain-tavily transformers torch qdrant-client fastapi uvicorn "fastapi[standard]" bcrypt pymongo markitdown python-jose passlib pyjwt langchain-text-splitters 2>/dev/null
 
 export PYTHONPATH="$PROJECT_ROOT:$PYTHONPATH"
 
