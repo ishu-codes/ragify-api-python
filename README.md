@@ -22,17 +22,29 @@ or `./run.sh dev`. Requires PostgreSQL (see repo root `docker compose` / `make i
 
 ## Tests
 
-Rate limiting and credits are PostgreSQL-backed, so the test suite needs a
-Postgres instance (the one from `make infra-up` works):
+Unit tests use mocks and temporary directories and do not need PostgreSQL:
 
 ```bash
 uv sync --extra dev
-make api-test
+uv run pytest
 ```
 
-The test database (default `ragify_test` on the same server as the app DB)
+Integration tests exercise real PostgreSQL queries, authentication and the
+FastAPI request stack. They are opt-in because rate limiting and credits rely
+on PostgreSQL-specific SQL:
+
+```bash
+uv run pytest --run-integration -m integration
+```
+
+The integration database (default `ragify_test` on the app database server)
 and its schema are created automatically on first run. Point
-`TEST_DATABASE_URL` elsewhere if you want a dedicated instance.
+`TEST_DATABASE_URL` at a dedicated empty database when needed. Run the full
+suite with coverage using:
+
+```bash
+uv run pytest --run-integration --cov=src --cov-report=term-missing
+```
 
 ## Endpoints
 

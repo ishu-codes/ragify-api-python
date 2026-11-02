@@ -27,11 +27,23 @@ dependencies = [
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.24",
+    "pytest-cov>=6.0",
 ]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+addopts = "-ra"
+markers = [
+    "integration: tests that require a PostgreSQL database and exercise the application stack",
+]
+
+[tool.coverage.run]
+source = ["src"]
+omit = ["src/ragify_client/protos/*"]
+
+[tool.coverage.report]
+show_missing = true
 
 [dependency-groups]
 dev = [

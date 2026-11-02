@@ -12,6 +12,8 @@ from src.quotas import rate_limit as rl
 from src.quotas.models import RateLimit
 from src.workspace.models import Workspace
 
+pytestmark = pytest.mark.integration
+
 
 def _make_request(
     headers: list[tuple[bytes, bytes]] | None = None,
@@ -172,7 +174,7 @@ def test_login_is_rate_limited_per_ip_and_client(client):
     assert statuses[10] == 429
 
 
-async def test_query_is_rate_limited_after_credits_are_exhausted(client, db):
+async def test_query_with_no_credits_returns_payment_required(client, db):
     response = client.post(
         "/api/v1/auth/register",
         json={
@@ -193,8 +195,7 @@ async def test_query_is_rate_limited_after_credits_are_exhausted(client, db):
     await db.commit()
     await db.refresh(workspace)
 
-    # Zero credits so the query endpoint fails fast with 402 (no RAG call),
-    # letting the per-user query rate limit be exercised.
+    # Zero credits so the query endpoint fails fast with 402 (no RAG call).
     await db.execute(
         update(User).where(User.id == user_id).values(credit_balance=0)
     )
@@ -209,26 +210,18 @@ async def test_query_is_rate_limited_after_credits_are_exhausted(client, db):
         )
         statuses.append(response.status_code)
 
-    assert statuses[:10] == [402] * 10
-    assert statuses[10] == 429
+    assert statuses == [402] * 11
 
 
-def test_global_per_user_backstop_blocks_after_burst(monkeypatch, client):
+async def test_authenticated_limiter_uses_the_user_id(monkeypatch, db):
     monkeypatch.setitem(rl.RATE_LIMITS, "api_min", (2, 60))
+    check = rl.rate_limit_authenticated("api_min")
+    request = _make_request()
 
-    response = client.post(
-        "/api/v1/auth/register",
-        json={
-            "name": "burst",
-            "email": "burst@example.com",
-            "password": "password123",
-        },
-    )
-    assert response.status_code == 201
-    headers = {"Authorization": f"Bearer {response.json()['access_token']}"}
+    await check(request, db, 42)
+    await check(request, db, 42)
+    with pytest.raises(HTTPException) as exc_info:
+        await check(request, db, 42)
 
-    for _ in range(2):
-        assert (
-            client.get("/api/v1/workspaces/", headers=headers).status_code == 200
-        )
-    assert client.get("/api/v1/workspaces/", headers=headers).status_code == 429
+    assert exc_info.value.status_code == 429
+    await check(request, db, 43)

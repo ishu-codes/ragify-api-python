@@ -1,7 +1,9 @@
-"""Shared fixtures for the ragify-api test suite.
+"""Shared fixtures and integration-test gating for the ragify-api suite.
 
 Rate limiting and credits are PostgreSQL-backed, so the tests run against a
-real Postgres database. Point ``TEST_DATABASE_URL`` at an empty database (for
+real Postgres database. Integration tests are opt-in via
+``--run-integration`` and only initialize the database when they request a
+database-backed fixture. Point ``TEST_DATABASE_URL`` at an empty database (for
 example the one started by ``make infra-up`` or a dedicated test container);
 the schema is created automatically on first use.
 """
@@ -57,6 +59,27 @@ for _name, _value in _QUOTA_ENV.items():
     os.environ[_name] = _value
 
 
+def pytest_addoption(parser):
+    parser.addoption(
+        "--run-integration",
+        action="store_true",
+        default=False,
+        help="run tests marked as integration (requires PostgreSQL)",
+    )
+
+
+def pytest_collection_modifyitems(config, items):
+    if config.getoption("--run-integration"):
+        return
+
+    skip_integration = pytest.mark.skip(
+        reason="integration test; use --run-integration (requires PostgreSQL)"
+    )
+    for item in items:
+        if "integration" in item.keywords:
+            item.add_marker(skip_integration)
+
+
 async def _ensure_database() -> None:
     """Create the test database if it does not exist yet."""
     url = make_url(TEST_DATABASE_URL)
@@ -105,15 +128,17 @@ async def _truncate_all() -> None:
         await engine.dispose()
 
 
-@pytest.fixture(scope="session", autouse=True)
+@pytest.fixture(scope="session")
 async def _database() -> None:
     await _ensure_database()
     await _create_schema()
 
 
 @pytest.fixture(autouse=True)
-async def _clean_tables() -> None:
+async def _clean_tables(request) -> None:
     yield
+    if request.node.get_closest_marker("integration") is None:
+        return
     await _truncate_all()
 
 
@@ -125,7 +150,7 @@ def app():
 
 
 @pytest.fixture()
-def client(app):
+def client(app, _database):
     from fastapi.testclient import TestClient
 
     with TestClient(app) as test_client:
@@ -133,7 +158,7 @@ def client(app):
 
 
 @pytest.fixture()
-async def db():
+async def db(_database):
     engine = create_async_engine(TEST_DATABASE_URL)
     session_maker = async_sessionmaker(engine, expire_on_commit=False)
     async with session_maker() as session:

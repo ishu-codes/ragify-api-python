@@ -17,3 +17,8 @@ storage/
 
 # Unnecessary files
 */results.md
+
+# Test coverage
+.coverage
+coverage.xml
+htmlcov/
